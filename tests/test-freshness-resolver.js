@@ -135,6 +135,43 @@ async function runTests() {
         assert.strictEqual(bucketFromAge(Infinity, thresholds), 'unknown', 'Infinity should be unknown');
     }
 
+    // Relative formats add elapsed week and month badges to resolved timestamps.
+    {
+        const mock = createTestMock();
+        try {
+            const { bucketFromAge, formatBadge, formatTooltip, getBucketThresholds, resolveFreshness } =
+                require('../src/utils/freshnessResolver');
+            const dayMs = 24 * 60 * 60 * 1000;
+            const uri = mock.vscode.Uri.file('/tmp/example.txt');
+            const stat = { mtime: new Date(Date.now() - 185 * dayMs) };
+
+            for (const format of ['relative-short', 'relative-long']) {
+                const config = {
+                    get: (key, fallback) => ({ dateDecorationFormat: format, freshnessBucketDaysWeek: 60 })[key] ?? fallback
+                };
+                const thresholds = getBucketThresholds(config);
+                for (const [days, expected] of [
+                    [2, '2d'], [7, '1w'], [13, '1w'], [14, '2w'], [21, '3w'], [28, '4w'],
+                    [29, '4w'], [30, '1M'], [60, '2M'], [90, '3M'], [240, '8M'],
+                    [269, '8M'], [270, '9M'], [299, '9M'], [300, 'stale']
+                ]) {
+                    assert.strictEqual(bucketFromAge(days * dayMs, thresholds), expected, `${format}: day ${days}`);
+                    assert.strictEqual(formatBadge(expected, 'fs', config), expected === 'stale' ? '~~' : expected);
+                }
+                const freshness = await resolveFreshness({ uri, stat, config, workspaceKind: 'desktop' });
+                assert.strictEqual(freshness.bucket, '6M');
+                assert.ok(formatTooltip(freshness, config).includes('Freshness: 6M\n'));
+            }
+
+            const config = { get: (key, fallback) => key === 'freshnessBucketDaysWeek' ? 60 : fallback };
+            const thresholds = getBucketThresholds(config);
+            assert.strictEqual(bucketFromAge(60 * dayMs, thresholds), '1w');
+            assert.strictEqual(bucketFromAge(60 * dayMs + 1, thresholds), 'stale');
+        } finally {
+            mock.dispose();
+        }
+    }
+
     // Test 6: formatBadgeAge maps all buckets to ≤2-char strings
     {
         const { formatBadgeAge } = require('../src/utils/freshnessResolver');

@@ -98,6 +98,10 @@ The boundaries that map a file age to a badge symbol are configurable:
 - `explorerDates.freshnessBucketDaysTwo` — Days threshold for `2d` (default: `2`)
 - `explorerDates.freshnessBucketDaysWeek` — Days threshold for `1w` (default: `7`)
 
+Set `"explorerDates.dateDecorationFormat": "relative-short"` (or `"relative-long"`) to show `2w` through `4w`, then `1M` through `9M`. Week badges count completed weeks, and month badges count completed 30-day periods. `9M` lasts through day 299. The badge becomes `~~` at day 300.
+
+The relative formats keep the `!!`, `T`, and `2d` thresholds. They display `1w` from the end of the `2d` bucket until day 14. `freshnessBucketDaysWeek` still sets the `1w` cutoff in the default `smart` format.
+
 #### Tooltip Source Line (`explorerDates.badge.sourceLabelMode`)
 
 Because source information cannot fit in a 2-character badge, it is included in the hover tooltip instead. This setting controls when the `Source:` line appears:

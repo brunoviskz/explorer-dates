@@ -137,11 +137,32 @@ async function testDecorationProviderErrorHandling() {
     console.log('  ✓ Decoration provider error handling validated');
 }
 
+async function testExtendedFreshnessBadge() {
+    configValues['explorerDates.enableExtensionApi'] = true;
+    const manager = new ExtensionApiManager();
+    const stat = vscode.workspace.fs.stat;
+    const formatKey = 'explorerDates.dateDecorationFormat';
+    const originalFormat = configValues[formatKey];
+    try {
+        vscode.workspace.fs.stat = async () => ({ mtime: Date.now() - 275 * 24 * 60 * 60 * 1000 });
+        const uri = VSCodeUri.file(path.join(workspaceRoot, 'package.json'));
+        configValues[formatKey] = 'relative-short';
+        assert.strictEqual((await manager.getDecorationForFile(uri)).badge, '9M');
+        configValues[formatKey] = 'smart';
+        assert.strictEqual((await manager.getDecorationForFile(uri)).badge, '~~');
+    } finally {
+        configValues[formatKey] = originalFormat;
+        vscode.workspace.fs.stat = stat;
+        manager.dispose();
+    }
+}
+
 async function run() {
     try {
         await testApiEnableDisable();
         await testPluginLifecycle();
         await testDecorationProviderErrorHandling();
+        await testExtendedFreshnessBadge();
         console.log('\n✅ Extension API tests passed');
         process.exitCode = 0;
     } catch (err) {

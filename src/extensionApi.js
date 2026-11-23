@@ -141,16 +141,18 @@ class ExtensionApiManager extends BaseEventEmitter {
             // Compute a ≤2-char badge (VS Code hard limit) using freshnessResolver
             let badgeText = '?';
             try {
-                const { formatBadge } = require('./utils/freshnessResolver');
+                const { bucketFromAge, formatBadge, getBucketThresholds } = require('./utils/freshnessResolver');
+                const config = vscode.workspace.getConfiguration('explorerDates');
+                const thresholds = getBucketThresholds(config);
                 const diffMs = Date.now() - lastModified.getTime();
                 const diffDays = diffMs / (1000 * 60 * 60 * 24);
                 let bucket;
-                if (diffDays < 0.07) bucket = 'now';        // ~1 hour
+                if (thresholds.extended) bucket = bucketFromAge(diffMs, thresholds);
+                else if (diffDays < 0.07) bucket = 'now';   // ~1 hour
                 else if (diffDays < 1) bucket = 'today';
                 else if (diffDays < 3) bucket = '2d';
                 else if (diffDays < 8) bucket = '1w';
                 else bucket = 'stale';
-                const config = vscode.workspace.getConfiguration('explorerDates');
                 badgeText = formatBadge(bucket, 'fs', config) || '?';
             } catch { /* ignore */ }
 

@@ -3,6 +3,11 @@ const { normalizePath, getRelativePath } = require('./pathUtils');
 const { diagLogOnce } = require('./webDiagnostics');
 const { normalizeTimestamp, resourceIdentity } = require('../filesystem/environmentContract');
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DAYS_PER_MONTH = 30;
+const MAX_MONTH_BADGE = 9;
+const EXTENDED_BUCKET = /^(?:[2-4]w|[1-9]M)$/;
+
 const SOURCE_RANK = {
     unknown: 0,
     github: 1,
@@ -25,11 +30,13 @@ function getConfigValue(config, key, fallback) {
 }
 
 function getBucketThresholds(config) {
+    const format = getConfigValue(config, 'dateDecorationFormat', 'smart');
     return {
         nowMinutes: Number(getConfigValue(config, 'freshnessBucketMinutesNow', 60)) || 60,
         todayHours: Number(getConfigValue(config, 'freshnessBucketHoursToday', 24)) || 24,
         twoDays: Number(getConfigValue(config, 'freshnessBucketDaysTwo', 2)) || 2,
-        oneWeek: Number(getConfigValue(config, 'freshnessBucketDaysWeek', 7)) || 7
+        oneWeek: Number(getConfigValue(config, 'freshnessBucketDaysWeek', 7)) || 7,
+        extended: format === 'relative-short' || format === 'relative-long'
     };
 }
 
@@ -37,13 +44,16 @@ function bucketFromAge(ageMs, thresholds) {
     if (!Number.isFinite(ageMs) || ageMs < 0) return 'unknown';
     const nowMs = thresholds.nowMinutes * 60 * 1000;
     const todayMs = thresholds.todayHours * 60 * 60 * 1000;
-    const twoDaysMs = thresholds.twoDays * 24 * 60 * 60 * 1000;
-    const weekMs = thresholds.oneWeek * 24 * 60 * 60 * 1000;
+    const twoDaysMs = thresholds.twoDays * DAY_MS;
     if (ageMs <= nowMs) return 'now';
     if (ageMs <= todayMs) return 'today';
     if (ageMs <= twoDaysMs) return '2d';
-    if (ageMs <= weekMs) return '1w';
-    return 'stale';
+    if (!thresholds.extended) return ageMs <= thresholds.oneWeek * DAY_MS ? '1w' : 'stale';
+
+    const days = Math.floor(ageMs / DAY_MS);
+    if (days < DAYS_PER_MONTH) return `${Math.max(1, Math.floor(days / 7))}w`;
+    const months = Math.floor(days / DAYS_PER_MONTH);
+    return months <= MAX_MONTH_BADGE ? `${months}M` : 'stale';
 }
 
 function formatBucketLabel(bucket) {
@@ -53,7 +63,7 @@ function formatBucketLabel(bucket) {
         case '2d': return '2d';
         case '1w': return '1w';
         case 'stale': return 'stale';
-        default: return 'unknown';
+        default: return EXTENDED_BUCKET.test(bucket) ? bucket : 'unknown';
     }
 }
 
@@ -75,7 +85,7 @@ function formatBadgeAge(bucket) {
         case '2d':    return '2d';
         case '1w':    return '1w';
         case 'stale': return '~~';
-        default:      return '?';
+        default:      return EXTENDED_BUCKET.test(bucket) ? bucket : '?';
     }
 }
 
@@ -414,6 +424,7 @@ module.exports = {
     formatBadge,
     formatTooltip,
     bucketFromAge,
+    getBucketThresholds,
     formatBucketLabel,
     formatBadgeAge,
     formatSourceLabel,
